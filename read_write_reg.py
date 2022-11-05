@@ -1,10 +1,15 @@
 import minimalmodbus
 
-instrument = minimalmodbus.Instrument('/dev/ttyUSB0', 9)
+instrument = minimalmodbus.Instrument('/dev/ttyUSB0', 1)
 
-temperature = instrument.read_register(registeraddress=7, functioncode=3)
-print(temperature)
+pressure_in = instrument.read_register(registeraddress=1, functioncode=3)
+pressure_out = instrument.read_register(registeraddress=2, functioncode=3)
+temperature_out = instrument.read_register(registeraddress=3, functioncode=3)
+totaliser = instrument.read_register(registeraddress=4, functioncode=3)
+status = instrument.read_register(registeraddress=5, functioncode=3)
 
-# instrument.write_register(registeraddress=8, value=int(100), functioncode=6)
-
-# print(instrument.read_register(registeraddress=8, functioncode=3))
+print(pressure_in)
+print(pressure_out)
+print(temperature_out)
+print(totaliser)
+print(status)
