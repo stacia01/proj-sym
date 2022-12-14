@@ -223,7 +223,7 @@ class Instrument:
                 parity=serial.PARITY_NONE,
                 bytesize=8,
                 stopbits=1,
-                timeout=0.05,
+                timeout=0.5,
                 write_timeout=2.0,
             )
         else:

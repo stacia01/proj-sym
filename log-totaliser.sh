@@ -1,0 +1,1 @@
+curl -v -X POST --data "{"monthly_usage": $1}" http://thingsboard.cloud/api/v1/$2/telemetry --header "Content-Type:application/json"
