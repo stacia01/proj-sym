@@ -1,16 +1,13 @@
-import os
-import sys
 import paho.mqtt.client as mqtt
 import json
 import minimalmodbus
-import subprocess
 from influxdb import InfluxDBClient
 from influxdb import DataFrameClient
 import datetime
 import time
 
 THINGSBOARD_HOST = 'thingsboard.cloud'
-ACCESS_TOKEN = 'ppxBMJsxsW9MyQmIkDm6'
+ACCESS_TOKEN = 'kFfsqrlV3ErI23uxOYUT'
 
 switch_state = {'switch': True}
 
@@ -52,8 +49,8 @@ def set_switch_state(status):
 # Data capture and upload interval in seconds. Less interval will eventually hang the DHT22.
 INTERVAL=30
 
-sensor_data = {'pressure_in': 0, 'pressure_out': 0, 'temperature_out': 0, 'craddle_number': 0, 'mode': "UNDEFINED", 'gas_totalizer': 0, 'monthly_usage': 0, 'hot_water': 0}
-
+# sensor_data = {'pressure_in': 0, 'pressure_out': 0, 'temperature_out': 0, 'craddle_number': 0, 'mode': "UNDEFINED", 'gas_totalizer': 0, 'monthly_usage': 0, 'hot_water': 0}
+sensor_data = {}
 next_reading = time.time() 
 
 client = mqtt.Client()
@@ -83,11 +80,11 @@ try:
             except:
                 continue
 
-        hmi_data = instrument.read_registers(11,11,3)
+        hmi_data = instrument.read_registers(11,12,3)
         pressure_in = hmi_data[0] / 10
         pressure_out = hmi_data[1] / 10
         temperature_out = hmi_data[2] / 10
-        gas_totalizer = (hmi_data[3]*1000 + hmi_data[4])/10
+        gas_totalizer = (hmi_data[11]*10000 + hmi_data[3]*1000 + hmi_data[4])/10
         craddle_number = hmi_data[5]
         hot_water = hmi_data[10] / 10
 
@@ -112,13 +109,13 @@ try:
 
         try:
             query_gas_totalizer = 'select last(gas_totalizer) from system'
-            query1 = client.query(query_gas_totalizer)
+            query1 = query_client.query(query_gas_totalizer)
             prev_totalizer = query1['system']['last'][0]
             query_usage  = 'select last(monthly_usage) from system'
-            query2 = client.query(query_usage)
+            query2 = query_client.query(query_usage)
             prev_usage = query2['system']['last'][0]
             query_month = 'select last(month) from system'
-            query3 = client.query(query_month)
+            query3 = query_client.query(query_month)
             prev_month = query3['system']['last'][0]
 
             if(prev_month != current_month):
@@ -136,30 +133,29 @@ try:
             last_totalizer = last_totalizer + 999999.9
 
         delta = last_totalizer - prev_totalizer
+        print(delta)
 
-        print(hmi_data)
+        if(pressure_out < 400 and temperature_out < 200):
+            monthly_usage = prev_usage + (delta * (1.01325 + pressure_out) / 1.01325 * (273 + 15) / (273 + temperature_out))
+            sensor_data['monthly_usage'] = monthly_usage
 
-        monthly_usage = prev_usage + (delta * (1.01325 + pressure_out) / 1.01325 * (273 + 15) / (273 + temperature_out))
-
-        # print(monthly_usage)
-
-        # format the data as a single measurement for influx
-        body = [
-            {
-                "measurement": measurement_name,
-                "fields": {
-                    "gas_totalizer": gas_totalizer,
-                    "monthly_usage": monthly_usage,
-                    "month": current_month
+            # format the data as a single measurement for influx
+            body = [
+                {
+                    "measurement": measurement_name,
+                    "fields": {
+                        "gas_totalizer": gas_totalizer,
+                        "monthly_usage": monthly_usage,
+                        "month": current_month
+                    }
                 }
-            }
-        ]
+            ]
 
-        # connect to influx
-        ifclient = InfluxDBClient(ifhost,ifport,ifuser,ifpass,ifdb)
+            # connect to influx
+            ifclient = InfluxDBClient(ifhost,ifport,ifuser,ifpass,ifdb)
 
-        # write the measurement
-        ifclient.write_points(body)
+            # write the measurement
+            ifclient.write_points(body)
 
         if(pressure_in < 400):
             sensor_data['pressure_in'] = pressure_in
@@ -173,8 +169,6 @@ try:
         if(hot_water < 400):
             sensor_data['hot_water'] = hot_water
         sensor_data['mode'] = mode
-        if(pressure_out < 400 and pressure_in < 400):
-            sensor_data['monthly_usage'] = monthly_usage
 
         # Sending humidity and temperature data to ThingsBoard
         client.publish('v1/devices/me/telemetry', json.dumps(sensor_data), 1)
