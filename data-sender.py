@@ -22,17 +22,19 @@ for i in range(4):
     except:
         continue
 
-hmi_data = instrument.read_registers(11,9,3)
+hmi_data = instrument.read_registers(11,11,3)
 pressure_in = hmi_data[0] / 10
 pressure_out = hmi_data[1] / 10
 temperature_out = hmi_data[2] / 10
 gas_totalizer = (hmi_data[3]*1000 + hmi_data[4])/10
 craddle_number = hmi_data[5]
+hot_water = hmi_data[10]
 
 print(hmi_data)
 
 if(hmi_data[8] == 0):
     mode = "CNG"
+    mode_boolean = False
 elif(hmi_data[8] == 1):
     mode = "LPG"
 else:
@@ -49,21 +51,29 @@ measurement_name = "system"
 client = DataFrameClient(host = 'localhost', port = 8086)
 client.switch_database('home')
 
-query_first = 'select first(gas_totalizer) from system where time >= ' + str(unix)
-query = client.query(query_first)
-first = query['system']['first'][0]
+try:
+    query_gas_totalizer = 'select last(gas_totalizer) from system'
+    query1 = client.query(query_gas_totalizer)
+    prev_totalizer = query1['system']['last'][0]
+    query_usage  = 'select last(monthly_usage) from system'
+    query2 = client.query(query_usage)
+    prev_usage = query2['system']['last'][0]
 
-last = gas_totalizer
+except:
+    prev_totalizer = gas_totalizer
+    prev_usage = 0
+
+last_totalizer = gas_totalizer
 
 
-if(last < first):
-    last = last + 99999
+if(last_totalizer < prev_totalizer):
+    last_totalizer = last_totalizer + 999999.9
 
-delta = last - first
+delta = last_totalizer - prev_totalizer
 
 print(delta)
 
-monthly_usage = delta * (1.01325 + pressure_out) / 1.01325 * (273 + 15) / (273 + temperature_out)
+monthly_usage = prev_usage + (delta * (1.01325 + pressure_out) / 1.01325 * (273 + 15) / (273 + temperature_out))
 
 # print(monthly_usage)
 
@@ -72,7 +82,8 @@ body = [
     {
         "measurement": measurement_name,
         "fields": {
-            "gas_totalizer": gas_totalizer
+            "gas_totalizer": gas_totalizer,
+            "monthly_usage": monthly_usage
         }
     }
 ]
@@ -83,4 +94,4 @@ ifclient = InfluxDBClient(ifhost,ifport,ifuser,ifpass,ifdb)
 # write the measurement
 ifclient.write_points(body)
 
-result = subprocess.Popen(['bash','/home/global/proj-sym/tb-logger.sh', str(pressure_in), str(pressure_out), str(temperature_out), str(craddle_number), mode, str(gas_totalizer), str(monthly_usage), ACCESS_TOKEN], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+result = subprocess.Popen(['bash','/home/global/proj-sym/tb-logger.sh', str(pressure_in), str(pressure_out), str(temperature_out), str(craddle_number), mode, str(gas_totalizer), str(monthly_usage), str(hot_water), ACCESS_TOKEN], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

@@ -1,13 +1,20 @@
-
 import paho.mqtt.client as mqtt
-import RPi.GPIO as GPIO
 import json
+import minimalmodbus
 
-THINGSBOARD_HOST = 'demo.thingsboard.io'
-ACCESS_TOKEN = 'Your Access Token'
+for i in range(4):
+    port_address = '/dev/ttyUSB' + str(i)
+    try:
+        instrument = minimalmodbus.Instrument(port=port_address, slaveaddress=1, mode='rtu')
+        break
+    except:
+        continue
 
-# Set the GPIO as LOW
-gpio_state = {11: False}
+THINGSBOARD_HOST = 'thingsboard.cloud'
+ACCESS_TOKEN = 'ppxBMJsxsW9MyQmIkDm6'
+
+# We assume that all GPIOs are LOW
+switch_state = {'switch': False}
 
 
 # The callback for when the client receives a CONNACK response from the server.
@@ -16,7 +23,7 @@ def on_connect(client, userdata, rc, *extra_params):
     # Subscribing to receive RPC requests
     client.subscribe('v1/devices/me/rpc/request/+')
     # Sending current GPIO status
-    client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
+    client.publish('v1/devices/me/attributes', get_switch_state(), 1)
 
 
 # The callback for when a PUBLISH message is received from the server.
@@ -25,33 +32,25 @@ def on_message(client, userdata, msg):
     # Decode JSON request
     data = json.loads(msg.payload)
     # Check request method
-    if data['method'] == 'getGpioStatus':
+    if data['method'] == 'getValue':
         # Reply with GPIO status
-        client.publish(msg.topic.replace('request', 'response'), get_gpio_status(), 1)
-    elif data['method'] == 'setGpioStatus':
+        client.publish(msg.topic.replace('request', 'response'), get_switch_state(), 1)
+    elif data['method'] == 'setValue':
+        status = data['params']
         # Update GPIO status and reply
-        set_gpio_status(data['params']['pin'], data['params']['enabled'])
-        client.publish(msg.topic.replace('request', 'response'), get_gpio_status(), 1)
-        client.publish('v1/devices/me/attributes', get_gpio_status(), 1)
+        set_switch_state(status)
+        client.publish(msg.topic.replace('request', 'response'), get_switch_state(), 1)
+        client.publish('v1/devices/me/attributes', get_switch_state(), 1)
 
+def get_switch_state():
+    return json.dumps(switch_state)
 
-def get_gpio_status():
-    # Encode GPIOs state to json
-    return json.dumps(gpio_state)
-
-
-def set_gpio_status(pin, status):
-    # Output GPIOs state
-    GPIO.output(pin, GPIO.HIGH if status else GPIO.LOW)
-    # Update GPIOs state
-    gpio_state[pin] = status
-
-
-# Using board GPIO layout
-GPIO.setmode(GPIO.BOARD)
-for pin in gpio_state:
-    # Set output mode for all GPIO pins
-    GPIO.setup(pin, GPIO.OUT)
+def set_switch_state(status):
+    switch_state['switch'] = status
+    if(status):
+        instrument.write_register(22,1)
+    else:
+        instrument.write_register(22,0)
 
 client = mqtt.Client()
 # Register connect callback
@@ -66,4 +65,4 @@ client.connect(THINGSBOARD_HOST, 1883, 60)
 try:
     client.loop_forever()
 except KeyboardInterrupt:
-    GPIO.cleanup()
+    exit

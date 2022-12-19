@@ -1,1 +1,1 @@
-curl -v -X POST --data "{"pressure_in":$1, "pressure_out":$2, "temperature_out": $3, "craddle_number": $4, "mode": "$5", "gas_totalizer": $6, "monthly_usage": $7}" http://thingsboard.cloud/api/v1/$8/telemetry --header "Content-Type:application/json"
+curl -v -X POST --data "{"pressure_in":$1, "pressure_out":$2, "temperature_out": $3, "craddle_number": $4, "mode": "$5", "gas_totalizer": $6, "monthly_usage": $7, "hot_water": $8}" http://thingsboard.cloud/api/v1/$9/telemetry --header "Content-Type:application/json"
