@@ -7,7 +7,7 @@ import datetime
 import time
 
 THINGSBOARD_HOST = 'thingsboard.cloud'
-ACCESS_TOKEN = 'kFfsqrlV3ErI23uxOYUT'
+ACCESS_TOKEN = 'W1XPJBlPpgBQ3IZWJKHl'
 
 switch_state = {'switch': True}
 
@@ -81,12 +81,17 @@ try:
                 continue
 
         hmi_data = instrument.read_registers(11,12,3)
+
+        print(hmi_data)
+
         pressure_in = hmi_data[0] / 10
         pressure_out = hmi_data[1] / 10
         temperature_out = hmi_data[2] / 10
         gas_totalizer = (hmi_data[11]*10000 + hmi_data[3]*1000 + hmi_data[4])/10
         craddle_number = hmi_data[5]
         hot_water = hmi_data[10] / 10
+        start_filling = hmi_data[6]/10
+        stop_filling = hmi_data[7]/10
 
         if(hmi_data[8] == 0):
             mode = "CNG"
@@ -133,9 +138,8 @@ try:
             last_totalizer = last_totalizer + 999999.9
 
         delta = last_totalizer - prev_totalizer
-        print(delta)
 
-        if(pressure_out < 400 and temperature_out < 200):
+        if(pressure_out < 400 and temperature_out < 200 and delta < 1000):
             monthly_usage = prev_usage + (delta * (1.01325 + pressure_out) / 1.01325 * (273 + 15) / (273 + temperature_out))
             sensor_data['monthly_usage'] = monthly_usage
 
@@ -168,6 +172,14 @@ try:
         sensor_data['craddle_number'] = craddle_number
         if(hot_water < 400):
             sensor_data['hot_water'] = hot_water
+        if(start_filling < 400):
+            sensor_data['start_filling'] = start_filling
+        else:
+            sensor_data['start_filling'] = 0
+        if(stop_filling < 400):
+            sensor_data['stop_filling'] = stop_filling
+        else:
+            sensor_data['stop_filling'] = 0 
         sensor_data['mode'] = mode
 
         # Sending humidity and temperature data to ThingsBoard
